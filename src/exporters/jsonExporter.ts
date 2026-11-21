@@ -138,6 +138,7 @@ export function buildGstr1Json(data: Gstr1Return) {
         .sort((left, right) => Number(left[0]) - Number(right[0]))
         .map(([docNum, docs]) => ({
           doc_num: Number(docNum),
+          doc_typ: docs[0].nature,
           docs: docs.map((doc, index) => ({
             num: index + 1,
             from: doc.from,

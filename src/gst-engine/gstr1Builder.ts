@@ -210,6 +210,22 @@ function collapse(messages: string[], limit = 8) {
   })
 }
 
+function unclassifiedReason(record: ClassifiedSalesRecord) {
+  if (record.category !== 'REVIEW_REQUIRED') {
+    return `${record.category.replace(/_/g, ' ').toLowerCase()} supplies are not supported yet; file them separately`
+  }
+  if (record.customerGstin && !isValidGstin(record.customerGstin)) {
+    return `Customer GSTIN "${record.customerGstin}" is not a valid GSTIN`
+  }
+  if (!stateCodeFromPlace(record.placeOfSupply)) {
+    return `Unknown place of supply "${record.placeOfSupply || 'blank'}" — use a state name or 2-digit state code`
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(record.invoiceDate)) {
+    return `Invoice date missing or unreadable ("${record.invoiceDate || 'blank'}")`
+  }
+  return 'Could not classify the row — check its place of supply, date and invoice value'
+}
+
 export function buildGstr1(
   report: GstReport,
   sellerGstinInput: string,
@@ -244,13 +260,15 @@ export function buildGstr1(
     'B2B', 'B2B_REVERSE_CHARGE', 'B2CL', 'B2CS', 'CDN',
   ].includes(record.category))
   for (const record of unsupported) {
-    const reason = record.category === 'REVIEW_REQUIRED'
-      ? 'Could not classify the row — usually a missing/unknown place of supply or invoice date'
-      : `${record.category.replace(/_/g, ' ').toLowerCase()} supplies are not supported yet; file them separately`
-    rowProblems.push(`${reason}@@${label(record)}`)
+    rowProblems.push(`${unclassifiedReason(record)}@@${label(record)}`)
+  }
+  if (report.records.length > 0 && report.records.every((record) => !record.taxableValue)) {
+    blockers.push('No taxable values were read from your file. Check that "Taxable value" is mapped to the right column in "Review column mapping".')
   }
 
+  // Table 14 applies only to sales made through an e-commerce operator.
   const usesEco = report.records.length > 0
+    && (Boolean(ecoGstin) || Boolean(report.ecommerceNatureOfSupply) || b2csType === 'E')
   if (usesEco && period >= TABLE_14_START) {
     if (!isValidGstin(ecoGstin)) blockers.push('Enter the e-commerce operator GSTIN (needed for Table 14 and B2CS type E).')
     if (!report.ecommerceOperator?.name?.trim()) blockers.push('Enter the e-commerce operator name (Table 14).')

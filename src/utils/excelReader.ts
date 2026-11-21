@@ -90,15 +90,30 @@ function readCsv(text: string): ExcelWorkbook {
 }
 
 export async function readExcel(file: File): Promise<ExcelWorkbook> {
+  const name = file.name.toLowerCase()
+  if (!/\.(xlsx|xls|csv)$/.test(name)) {
+    throw new Error(`"${file.name}" is not an Excel or CSV file. Upload the .xlsx, .xls or .csv report downloaded from the marketplace.`)
+  }
   const buffer = await file.arrayBuffer()
-  if (file.name.toLowerCase().endsWith('.csv')) {
+  if (name.endsWith('.csv')) {
     return readCsv(new TextDecoder().decode(buffer))
   }
 
-  const workbook = XLSX.read(buffer, {
-    type: 'array',
-    cellDates: true,
-  })
+  const bytes = new Uint8Array(buffer.slice(0, 4))
+  const isZip = bytes[0] === 0x50 && bytes[1] === 0x4b
+  if (name.endsWith('.xlsx') && !isZip) {
+    throw new Error(`"${file.name}" is not a valid Excel file (it may be damaged or renamed). Download the report again, or save it as .xlsx or .csv.`)
+  }
+
+  let workbook: XLSX.WorkBook
+  try {
+    workbook = XLSX.read(buffer, {
+      type: 'array',
+      cellDates: true,
+    })
+  } catch {
+    throw new Error(`"${file.name}" could not be read as a spreadsheet. Download the report again, or save it as .xlsx or .csv.`)
+  }
 
   const result: ExcelWorkbook = {}
 

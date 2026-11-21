@@ -9,7 +9,7 @@ import MarketplaceSelector from './components/MarketplaceSelector'
 import TcsReconciliationPanel from './components/TcsReconciliationPanel'
 import Table13DocumentsForm from './components/Table13DocumentsForm'
 import ValidationPanel from './components/ValidationPanel'
-import { generateGstReport } from './gst-engine/gstClassifier'
+import { exclusionReason, generateGstReport } from './gst-engine/gstClassifier'
 import { buildGstr1 } from './gst-engine/gstr1Builder'
 import { suggestTable13 } from './gst-engine/table13Generator'
 import { createMarketplaceColumnMapping, processMarketplaceRows } from './processors'
@@ -72,6 +72,8 @@ const TURNOVER_BANDS = {
   above5: 5_00_00_001,
 } as const
 
+const NO_RECORDS: SalesRecord[] = []
+
 function preferredSheet(workbook: ExcelWorkbook, fileName: string) {
   const sheets = Object.keys(workbook).filter((name) => workbook[name].length > 0)
   return sheets.find((name) => detectFormat(Object.keys(workbook[name][0]), fileName) !== null) ?? sheets[0] ?? ''
@@ -119,22 +121,22 @@ function App() {
       .map((record) => ({ ...record, sourceFile: files.length > 1 ? file.name : undefined }))),
     [marketplace, enrichedFiles, columnMapping, files.length],
   )
-  const report = useMemo(
-    () => generateGstReport(records, sellerGstin, {
+  // The full return is only calculated after "Generate", so typing stays fast with large files.
+  const baseReport = useMemo(
+    () => generateGstReport(hasGenerated ? records : NO_RECORDS, sellerGstin, {
       filingPeriod,
       annualAggregateTurnover: turnoverValue,
-      portalTcsTotal: validPortalTcsValue,
       b2csSupplyType,
       ecommerceOperator: { gstin: ecommerceOperatorGstin, name: ecommerceOperatorName },
       ecommerceNatureOfSupply: ecommerceNatureOfSupply || undefined,
       table13Documents,
     }),
     [
+      hasGenerated,
       records,
       sellerGstin,
       filingPeriod,
       turnoverValue,
-      validPortalTcsValue,
       b2csSupplyType,
       ecommerceOperatorGstin,
       ecommerceOperatorName,
@@ -142,15 +144,17 @@ function App() {
       table13Documents,
     ],
   )
+  const report = useMemo(
+    () => ({ ...baseReport, portalTcsTotal: validPortalTcsValue }),
+    [baseReport, validPortalTcsValue],
+  )
   const gstr1 = useMemo(
     () => buildGstr1(report, sellerGstin, { defaultUqc }),
     [report, sellerGstin, defaultUqc],
   )
-  const table13Suggestion = useMemo(() => {
-    if (marketplace === 'meesho') return null
-    const suggestion = suggestTable13(report.records)
-    return suggestion.length > 0 ? suggestion : null
-  }, [marketplace, report.records])
+  const suggestTable13FromFile = marketplace === 'meesho' || records.length === 0
+    ? null
+    : () => suggestTable13(records.filter((record) => !exclusionReason(record, sellerGstin)))
   const unexpectedFormats = enrichedFiles.filter((file) => {
     const expected = expectedFormatsFor(marketplace)
     return expected.length > 0 && file.format !== null && !expected.includes(file.format)
@@ -500,7 +504,7 @@ function App() {
             {filingPeriod >= '2025-05' && (
               <Table13DocumentsForm
                 documents={table13Documents}
-                suggestion={table13Suggestion}
+                suggest={suggestTable13FromFile}
                 onChange={(documents) => {
                   setTable13Documents(documents)
                   setHasGenerated(false)

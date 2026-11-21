@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Plus, Trash2, Wand2 } from 'lucide-react'
 import { TABLE13_DOCUMENT_NATURES } from '../gst-engine/table13Generator'
 import type { Table13DocumentNature, Table13DocumentSummary } from '../types'
@@ -5,11 +6,12 @@ import type { Table13DocumentNature, Table13DocumentSummary } from '../types'
 interface Table13DocumentsFormProps {
   documents: Table13DocumentSummary[]
   onChange: (documents: Table13DocumentSummary[]) => void
-  /** Suggested rows from the uploaded file, or null when the file has no document numbers. */
-  suggestion: Table13DocumentSummary[] | null
+  /** Builds suggested rows from the uploaded file; null when the report has no document numbers. */
+  suggest: (() => Table13DocumentSummary[]) | null
 }
 
-function Table13DocumentsForm({ documents, onChange, suggestion }: Table13DocumentsFormProps) {
+function Table13DocumentsForm({ documents, onChange, suggest }: Table13DocumentsFormProps) {
+  const [note, setNote] = useState('')
   const updateDocument = (
     index: number,
     field: keyof Table13DocumentSummary,
@@ -46,15 +48,20 @@ function Table13DocumentsForm({ documents, onChange, suggestion }: Table13Docume
       <div className="table13-actions">
         <button
           className="text-button table13-add"
-          disabled={!suggestion || suggestion.length === 0}
+          disabled={!suggest}
           type="button"
-          onClick={() => suggestion && onChange(suggestion)}
+          onClick={() => {
+            const rows = suggest?.() ?? []
+            setNote(rows.length > 0 ? '' : 'No invoice or credit-note numbers were found in the uploaded file.')
+            if (rows.length > 0) onChange(rows)
+          }}
         >
           <Wand2 size={14} /> Auto-fill from file
         </button>
-        {suggestion === null && (
-          <small>This report has no invoice numbers (e.g. Meesho) — copy the series from the marketplace's invoice download.</small>
+        {!suggest && (
+          <small>Upload a report first. Meesho's GST report has no invoice numbers — copy the series from Meesho's invoice download.</small>
         )}
+        {note && <small>{note}</small>}
       </div>
       {documents.map((document, index) => (
         <div className="table13-row" key={`${index}-${document.natureOfDocument}`}>
