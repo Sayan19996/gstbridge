@@ -10,5 +10,5 @@
     "skipLibCheck": true,
     "types": []
   },
-  "include": ["./**/*.ts", "../server/**/*.ts"]
+  "include": ["./**/*.ts", "../server/**/*.ts", "../worker/**/*.ts"]
 }

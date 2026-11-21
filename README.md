@@ -10,7 +10,7 @@ Sales files are processed in the browser and never uploaded. Downloads cost **�
 ```sh
 npm install
 npm run dev          # UI only. Payments show "Simulate payment (development only)".
-npm run pages:dev    # UI + payment functions (needs .dev.vars, see below)
+npm run worker:dev   # UI + payment endpoints in Cloudflare's runtime (needs .dev.vars, see below)
 ```
 
 ## How a return is built
@@ -57,10 +57,19 @@ JavaScript. Moving JSON generation to the server would close that gap but means 
 4. Cloudflare Pages → your project → Settings → Variables and Secrets: add `RAZORPAY_KEY_ID` (plain text) and
    `RAZORPAY_KEY_SECRET` (**Secret**) for Production. Redeploy. Switch to `rzp_live_…` keys when ready.
 
-## Deploy (free)
+## Deploy (free) — Cloudflare Worker or Pages
 
-Cloudflare Pages → Create → Connect to Git → this repo. Framework preset **Vite**, build command
-`npm run build`, output directory `dist`. The `functions/` folder is deployed automatically.
+The repo works either way:
+
+- **Worker** (`*.workers.dev`, what Cloudflare's "Import a repository" creates): uses `wrangler.jsonc` and
+  `worker/index.ts`, which serves `dist/` and routes `/api/create-order` and `/api/verify-payment`.
+  Worker → Settings → Build: build command `npm run build`, deploy command `npx wrangler deploy`,
+  root directory `/`. The Worker's name in the dashboard must be `gstbridge` (same as in `wrangler.jsonc`).
+- **Pages** (`*.pages.dev`): framework preset Vite, build command `npm run build`, output `dist`.
+  The `functions/` folder is deployed automatically.
+
+Then add `RAZORPAY_KEY_ID` (Text) and `RAZORPAY_KEY_SECRET` (Secret) under Settings → Variables and Secrets,
+and redeploy. Local test of the Worker: put test keys in `.dev.vars` and run `npm run worker:dev`.
 
 ## Before relying on it
 
